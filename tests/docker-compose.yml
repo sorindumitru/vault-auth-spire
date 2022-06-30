@@ -1,0 +1,25 @@
+services:
+  vault:
+    build: vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_CACERT=/vault/config/ca.crt
+    links:
+      - spire-server
+    ports:
+      - "8200:8200"
+    volumes:
+      - runtime:/runtime
+      - ./vault/config:/vault/config
+      - ../vault-auth-spire:/vault/plugins/vault-auth-spire
+  spire-server:
+    build: spire-server
+    ports:
+      - "8081"
+    volumes:
+      - runtime:/runtime
+      - ./vault/config:/vault/config
+
+volumes:
+  runtime: {}

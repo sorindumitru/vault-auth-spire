@@ -1,0 +1,17 @@
+{
+    "trustsource": {
+        "file": {
+            "domains": {
+                "example.com": "runtime/example.com"
+            }
+        }
+    },
+    "log": {
+        "filename": "/tmp/vault-auth-spire.log",
+        "level": "DEBUG",
+        "maxSize": 10,
+        "maxBackups": 4,
+        "maxAge": 14,
+        "compress": true
+    }
+}
