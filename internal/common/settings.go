@@ -27,11 +27,16 @@ type Settings struct {
 }
 
 type SourceOfTrustSettings struct {
-	File *FileTrustSourceSettings
+	File        *FileTrustSourceSettings
+	WorkloadAPI *WorkloadAPISettings
 }
 
 type FileTrustSourceSettings struct {
 	Domains map[string][]string
+}
+
+type WorkloadAPISettings struct {
+	EndpointSocket string
 }
 
 type LogSettings struct {
@@ -97,8 +102,8 @@ func readLogSettings() (*LogSettings, error) {
 }
 
 func readSourceOfTrustSettings() (*SourceOfTrustSettings, error) {
-	if !viper.IsSet("trustsource.file") && !viper.IsSet("trustsource.spire") {
-		return nil, errors.New("Either trustsource.file or trustsource.spire are required but neither found")
+	if !viper.IsSet("trustsource.file") && !viper.IsSet("trustsource.workloadapi") {
+		return nil, errors.New("Either trustsource.file or trustsource.workloadapi are required but neither found")
 	}
 
 	// cause we use it a few times
@@ -110,16 +115,21 @@ func readSourceOfTrustSettings() (*SourceOfTrustSettings, error) {
 		if sourceOfTrust.File, err = readFileSourceOfTrustSettings(); err != nil {
 			return nil, err
 		}
+	} else if viper.IsSet("trustsource.workloadapi") {
+		sourceOfTrust.WorkloadAPI = readWorkloadAPISourceOfTrustSettings()
 	}
 
-	// TODO: Add implementation for Spire being the source of trust
-	//if(viper.IsSet("trustsource.spire")){
-	//	if trustSettings.File, err = readSpireSourceOfTrustSettings(); err != nil {
-	//		return nil, err
-	//	}
-	//}
-
 	return sourceOfTrust, nil
+}
+
+func readWorkloadAPISourceOfTrustSettings() *WorkloadAPISettings {
+	workloadAPI := new(WorkloadAPISettings)
+
+	if viper.IsSet("trustsource.workloadapi.endpoint_socket") {
+		workloadAPI.EndpointSocket = viper.GetString("trustsource.workloadapi.endpoint_socket")
+	}
+
+	return workloadAPI
 }
 
 func readFileSourceOfTrustSettings() (*FileTrustSourceSettings, error) {

@@ -107,7 +107,7 @@ func BackendFactory(ctx context.Context, backendConfig *logical.BackendConfig) (
 		},
 	}
 
-	if nil != settings.SourceOfTrust.File {
+	if settings.SourceOfTrust.File != nil {
 		verifier := verifier.NewLocalTrustBundleVerifier()
 
 		for trustDomain, bundles := range settings.SourceOfTrust.File.Domains {
@@ -116,6 +116,12 @@ func BackendFactory(ctx context.Context, backendConfig *logical.BackendConfig) (
 			}
 		}
 
+		spirePlugin.verifier = verifier
+	} else if settings.SourceOfTrust.WorkloadAPI != nil {
+		verifier, err := verifier.NewWorkloadAPIVerifier(settings.SourceOfTrust.WorkloadAPI.EndpointSocket)
+		if err != nil {
+			return nil, err
+		}
 		spirePlugin.verifier = verifier
 	} else {
 		return nil, errors.New("vault-auth-spire: No verifier found in settings")
