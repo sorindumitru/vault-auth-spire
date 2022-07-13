@@ -15,10 +15,6 @@ vault_run() {
     fi
 }
 
-vault_root_run() {
-    docker-compose exec -T --env VAULT_TOKEN=${VAULT_ROOT_TOKEN} vault vault "$@"
-}
-
 wait_for_server() {
     elapsed_time=0
     until server_run healthcheck &>/dev/null; do
@@ -32,9 +28,7 @@ wait_for_server() {
 
 register_spire_agent() {
     local agent_ca_fingerprint=$(openssl x509 -in spire-agent/agent-ca.crt -outform DER | openssl sha1 -r | awk '{print $1}')
-    local x509pop_selector="x509pop:ca:fingerprint:${agent_ca_fingerprint}"
-
-    server_run entry create -node -spiffeID "spiffe://example.com/agent" -selector "${x509pop_selector}"
+    server_run entry create -spiffeID "spiffe://example.com/vault" -parentID "spiffe://example.com/spire/agent/x509pop/${agent_ca_fingerprint}" -selector "unix:user:root"
 }
 
 unseal_vault() {
@@ -44,19 +38,21 @@ unseal_vault() {
     export VAULT_ROOT_TOKEN=$(echo "${initoutput}" | jq -r .root_token)
 }
 
+
 setup_file() {
     docker-compose down -v
     docker-compose build
     docker-compose up -d spire-server
     wait_for_server
+    register_spire_agent
 
     docker-compose exec spire-server sh -c "/opt/spire/bin/spire-server bundle show -format=spiffe > /runtime/example.com"
 
     docker-compose up -d vault
     unseal_vault
 
-    vault_root_run secrets enable -version=2 kv
-    vault_root_run policy write spiffe-policy -<<EOF
+    vault_run --token "${VAULT_ROOT_TOKEN}" secrets enable -version=2 kv
+    vault_run --token "${VAULT_ROOT_TOKEN}" policy write spiffe-policy -<<EOF
 path "kv/data/secret/*" {
   capabilities = ["read", "update", "create"]
 }
@@ -68,8 +64,8 @@ teardown_file() {
 }
 
 @test "Enable plugin" {
-    vault_root_run plugin register -sha256="$(shasum -a 256 '../vault-auth-spire' | cut -d' ' -f1)" -args="--settings-file=/vault/config/vault-auth-spire.json" -command="vault-auth-spire" auth spire
-    vault_root_run auth enable -path="spire" spire
+    vault_run --token "${VAULT_ROOT_TOKEN}" plugin register -sha256="$(shasum -a 256 '../vault-auth-spire' | cut -d' ' -f1)" -args="--settings-file=/vault/config/vault-auth-spire.json" -command="vault-auth-spire" auth spire
+    vault_run --token "${VAULT_ROOT_TOKEN}" auth enable -path="spire" spire
 }
 
 @test "Login with X509-SVID" {
@@ -107,6 +103,11 @@ teardown_file() {
     JWTSVID=$(server_run jwt mint -spiffeID "spiffe://example.com/vault/user" -audience "vault")
     run vault_run write auth/spire/login jwt-svid="${JWTSVID}"
     [ "$status" -eq 0 ]
+}
+
+@test "Login with not-JWT-SVID" {
+    run vault_run write auth/spire/login jwt-svid="notatoken"
+    [ "$status" -ne 0 ]
 }
 
 @test "JWT-SVID: can write own secret" {

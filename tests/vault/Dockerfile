@@ -13,7 +13,8 @@ COPY supervisord.conf /opt/supervisord/
 RUN apk --no-cache add supervisor
 
 ENV VAULT_ADDR="https://127.0.0.1:8200" \
-    VAULT_CACRT="/vault/config/ca.crt"
+    VAULT_CACRT="/vault/config/ca.crt" \
+    SPIFFE_ENDPOINT_SOCKET="unix:///tmp/spire-agent/public/api.sock"
 
 ENTRYPOINT ["/usr/bin/dumb-init", "supervisord", "--nodaemon", "--configuration", "/opt/supervisord/supervisord.conf"]
 CMD []

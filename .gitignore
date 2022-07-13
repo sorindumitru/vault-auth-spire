@@ -1,3 +1,4 @@
 vault-auth-spire
 build/
 .idea/
+tests/vault/config/vault-auth-spire.json
