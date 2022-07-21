@@ -68,57 +68,64 @@ teardown_file() {
     vault_run --token "${VAULT_ROOT_TOKEN}" auth enable -path="spire" spire
 }
 
+@test "Create role for tests" {
+    vault_run --token "${VAULT_ROOT_TOKEN}" write auth/spire/role/test-role \
+        token_policies="spiffe-policy" \
+        bound_audiences="vault-auth-spire" \
+        bound_spiffe_ids="spiffe://example.com/vault/user,spiffe://example.com/vault/process/1"
+}
+
 @test "Login with X509-SVID" {
     server_run x509 mint -spiffeID "spiffe://example.com/vault/user" -write /runtime
-    run vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -force auth/spire/login
+    run vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -force auth/spire/login role="test-role"
     [ "$status" -eq 0 ]
 }
 
 @test "Login with wrong X509-SVID key" {
     server_run x509 mint -spiffeID "spiffe://example.com/vault/user" -write /runtime
-    run vault_run write -client-cert=/runtime/svid.pem -client-key=/vault/config/ca.key -force auth/spire/login
+    run vault_run write -client-cert=/runtime/svid.pem -client-key=/vault/config/ca.key -force auth/spire/login role="test-role"
     [ "$status" -ne 0 ]
 }
 
 @test "Login with non X509-SVID certificate" {
     server_run x509 mint -spiffeID "spiffe://example.com/vault/user" -write /runtime
-    run vault_run write -client-cert=/vault/config/server.crt -client-key=/vault/config/server.key -force auth/spire/login
+    run vault_run write -client-cert=/vault/config/server.crt -client-key=/vault/config/server.key -force auth/spire/login role="test-role"
     [ "$status" -ne 0 ]
 }
 
 @test "X509-SVID: can write own secret" {
     server_run x509 mint -spiffeID "spiffe://example.com/vault/user" -write /runtime
-    TOKEN=$(vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -format=json -force auth/spire/login | jq -r .auth.client_token)
+    TOKEN=$(vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -format=json -force auth/spire/login role="test-role" | jq -r .auth.client_token)
     vault_run --token "${TOKEN}" kv put -mount=kv secret/test value=test
 }
 
 @test "X509-SVID: can not write other secret" {
     server_run x509 mint -spiffeID "spiffe://example.com/vault/user" -write /runtime
-    TOKEN=$(vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -format=json -force auth/spire/login | jq -r .auth.client_token)
+    TOKEN=$(vault_run write -client-cert=/runtime/svid.pem -client-key=/runtime/key.pem -format=json -force auth/spire/login role="test-role" | jq -r .auth.client_token)
     run vault_run --token "${TOKEN}" kv put -mount=kv not-my-secret/test value=test
     [ "$status" -ne 0 ]
 }
 
 @test "Login with JWT-SVID" {
     JWTSVID=$(server_run jwt mint -spiffeID "spiffe://example.com/vault/user" -audience "vault")
-    run vault_run write auth/spire/login jwt-svid="${JWTSVID}"
+    run vault_run write auth/spire/login jwt-svid="${JWTSVID}" role="test-role"
     [ "$status" -eq 0 ]
 }
 
 @test "Login with not-JWT-SVID" {
-    run vault_run write auth/spire/login jwt-svid="notatoken"
+    run vault_run write auth/spire/login jwt-svid="notatoken" role="test-role"
     [ "$status" -ne 0 ]
 }
 
 @test "JWT-SVID: can write own secret" {
     JWTSVID=$(server_run jwt mint -spiffeID "spiffe://example.com/vault/user" -audience "vault")
-    TOKEN=$(vault_run write -format=json auth/spire/login jwt-svid="${JWTSVID}" | jq -r .auth.client_token)
+    TOKEN=$(vault_run write -format=json auth/spire/login jwt-svid="${JWTSVID}" role="test-role" | jq -r .auth.client_token)
     vault_run --token "${TOKEN}" kv put -mount=kv secret/test value=test
 }
 
 @test "JWT-SVID: can not write other secret" {
     JWTSVID=$(server_run jwt mint -spiffeID "spiffe://example.com/vault/user" -audience "vault")
-    TOKEN=$(vault_run write -format=json auth/spire/login jwt-svid="${JWTSVID}" | jq -r .auth.client_token)
+    TOKEN=$(vault_run write -format=json auth/spire/login jwt-svid="${JWTSVID}" role="test-role" | jq -r .auth.client_token)
     run vault_run --token "${TOKEN}" kv put -mount=kv not-my-secret/test value=test
     [ "$status" -ne 0 ]
 }
